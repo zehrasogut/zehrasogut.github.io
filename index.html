@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Molekül Dedektifi - Saf Maddeler Oyunu</title>
+    <!-- Tailwind CSS Yükleniyor -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <style>
+        /* Inter fontunu kullanmak için */
+        body {
+            font-family: 'Inter', sans-serif;
+            transition: background-color 0.5s;
+            background: linear-gradient(-45deg, #ecfeff, #e9d5ff, #dbeafe, #fef9c3);
+            background-size: 400% 400%;
+            animation: gradientBG 18s ease infinite;
+        }
+        /* Başlıklar için daha eğlenceli bir font (optional) */
+        h1, h2 {
+            font-weight: 800;
+        }
+        /* Dokunmatik hedefler için büyük buton stili */
+        .game-button {
+            padding: 1.5rem 1rem;
+            font-size: 1.5rem;
+            font-weight: bold;
+            transition: transform 0.1s, box-shadow 0.1s;
+            cursor: pointer;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+        .game-button:active {
+            transform: translateY(2px);
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+        /* Dinamik geri bildirim için stil */
+        .feedback-correct {
+            animation: flashGreen 0.3s ease-out;
+            background-color: #10b981 !important; /* Tailwind green-500 */
+        }
+        .feedback-wrong {
+            animation: flashRed 0.3s ease-out;
+            background-color: #ef4444 !important; /* Tailwind red-500 */
+        }
+        /* Question Box animasyonu */
+        @keyframes flashGreen {
+            from { background-color: #d1fae5; }
+            to { background-color: #065f46; }
+        }
+        @keyframes flashRed {
+            from { background-color: #fee2e2; }
+            to { background-color: #991b1b; }
+        }
+        /* Modal stilini gizleme */
+        .modal-overlay {
+            background-color: rgba(0, 0, 0, 0.7);
+            z-index: 50;
+        }
+        .error-list {
+            /* Tablo kapsayıcısının yüksekliğini ve kayırma çubuğunu ayarlar */
+            max-height: 150px;
+            overflow-y: auto;
+            margin-top: 1rem;
+            padding: 0.5rem;
+            border: 1px solid #ccc;
+            border-radius: 8px;
+            text-align: left;
+        }
+        .glass {
+            background: rgba(255, 255, 255, 0.6);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.35);
+        }
+        @keyframes gradientBG {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+        .blob {
+            position: fixed;
+            border-radius: 9999px;
+            filter: blur(60px);
+            opacity: 0.35;
+            z-index: 0;
+            animation: float 18s ease-in-out infinite;
+        }
+        .blob-1 { width: 380px; height: 380px; left: -60px; top: -60px; background: radial-gradient(circle at 30% 30%, #a78bfa, #60a5fa); }
+        .blob-2 { width: 300px; height: 300px; right: -40px; bottom: -40px; background: radial-gradient(circle at 70% 70%, #34d399, #22d3ee); animation-delay: 6s; }
+        .blob-3 { width: 260px; height: 260px; right: 15%; top: 10%; background: radial-gradient(circle at 50% 50%, #fca5a5, #fcd34d); animation-delay: 3s; }
+        @keyframes float {
+            0%, 100% { transform: translateY(0) translateX(0) scale(1); }
+            50% { transform: translateY(20px) translateX(10px) scale(1.05); }
+        }
+        .pop {
+            animation: popIn 260ms ease;
+        }
+        @keyframes popIn {
+            0% { transform: scale(0.95); opacity: 0.5; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .btn-glow {
+            box-shadow: 0 10px 30px rgba(59,130,246,0.35);
+            transition: transform 120ms ease, box-shadow 200ms ease;
+        }
+        .btn-glow:active { transform: translateY(1px) scale(0.98); }
+        .confetti {
+            position: fixed;
+            top: -10px;
+            width: 8px;
+            height: 14px;
+            opacity: 0.9;
+            z-index: 60;
+            animation: fall 1600ms linear forwards;
+        }
+        @keyframes fall {
+            0% { transform: translateY(0) rotate(0deg); }
+            100% { transform: translateY(110vh) rotate(720deg); }
+        }
+    </style>
+</head>
+
+<body class="bg-gray-100 min-h-screen flex items-center justify-center p-4">
+    <div class="blob blob-1"></div>
+    <div class="blob blob-2"></div>
+    <div class="blob blob-3"></div>
+    <!-- Ana Oyun Kapsayıcısı -->
+    <div id="game-container" class="relative w-full max-w-sm sm:max-w-md glass shadow-2xl rounded-2xl p-6 sm:p-8 flex flex-col items-center z-10">
+        <h1 class="text-3xl text-gray-800 mb-6 font-extrabold text-center">
+            🧪 Molekül Dedektifi
+        </h1>
+
+        <!-- Skor ve Zaman Göstergesi -->
+        <div class="flex justify-between items-end w-full text-lg font-semibold mb-3">
+            <span class="text-blue-600">Skor: <span id="score">0</span></span>
+            <!-- Süre 60 saniye olarak güncellendi -->
+            <span class="text-red-600">Süre: <span id="time">60</span>s</span>
+        </div>
+        <div class="w-full h-2 bg-white/60 rounded-full overflow-hidden mb-6">
+            <div id="time-bar" class="h-full bg-gradient-to-r from-green-400 via-yellow-300 to-red-400" style="width: 100%;"></div>
+        </div>
+
+        <!-- Soru Alanı -->
+        <div id="question-box" class="w-full h-32 flex flex-col justify-center items-center bg-white/60 rounded-xl p-4 mb-8 border border-white/50 shadow">
+            <p id="question-text" class="text-2xl sm:text-3xl text-gray-900 font-extrabold text-center select-none">
+                OYUN BAŞLASIN!
+            </p>
+        </div>
+
+        <!-- Cevap Butonları -->
+        <div class="flex space-x-4 w-full" id="button-container">
+            <button id="element-btn" data-answer="Element" class="game-button flex-1 bg-gradient-to-br from-emerald-400 to-emerald-600 hover:from-emerald-500 hover:to-emerald-700 text-white rounded-xl shadow-lg transition duration-150 active:scale-95 btn-glow">
+                ELEMENT
+            </button>
+            <button id="compound-btn" data-answer="Bileşik" class="game-button flex-1 bg-gradient-to-br from-fuchsia-400 to-purple-600 hover:from-fuchsia-500 hover:to-purple-700 text-white rounded-xl shadow-lg transition duration-150 active:scale-95 btn-glow">
+                BİLEŞİK
+            </button>
+        </div>
+        
+        <!-- Oyun Başlatma Butonu (Başlangıçta Görünür) -->
+        <button id="start-btn" class="game-button mt-6 w-full bg-gradient-to-r from-sky-400 to-blue-600 hover:from-sky-500 hover:to-blue-700 text-white rounded-xl shadow-lg transition duration-150 active:scale-95 btn-glow">
+            BAŞLA
+        </button>
+
+    </div>
+
+    <!-- Modal (Oyun Sonu/Bilgilendirme Kutusu) -->
+    <div id="game-modal" class="modal-overlay fixed inset-0 hidden items-center justify-center p-4">
+        <div class="glass rounded-2xl shadow-2xl p-8 w-full max-w-lg text-center transform transition-transform duration-300 scale-100">
+            <h2 id="modal-title" class="text-3xl font-extrabold text-gray-800 mb-4"></h2>
+            <p id="modal-message" class="text-lg text-gray-700 mb-4"></p>
+            
+            <!-- Yanlış Cevapların Gösterileceği Alan (TABLO OLARAK GÜNCELLENDİ) -->
+            <div id="error-section" class="hidden">
+                <h3 class="text-xl font-semibold text-red-600 mb-2">Hatalı Cevapların:</h3>
+                <div class="error-list"> 
+                    <table id="error-table" class="min-w-full text-sm">
+                        <thead>
+                            <tr class="bg-gray-200 text-gray-700">
+                                <th class="py-2 px-1 text-left w-1/3">Soru</th>
+                                <th class="py-2 px-1 text-center w-1/3">Senin Cevabın</th>
+                                <th class="py-2 px-1 text-center w-1/3">Doğrusu</th>
+                            </tr>
+                        </thead>
+                        <tbody id="error-table-body">
+                            <!-- Hatalar buraya eklenecek -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <button id="modal-close-btn" class="game-button w-full bg-blue-500 hover:bg-blue-600 text-white rounded-lg mt-6 transition duration-150 active:scale-95">
+                TEKRAR OYNA
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // Oyun Verileri
+        // Yeni element ve bileşik listesi eklendi.
+        const questions = [
+            // Elementler (Tek çeşit atom içerir)
+            { display: 'H (Hidrojen)', answer: 'Element' },
+            { display: 'He (Helyum)', answer: 'Element' },
+            { display: 'Au (Altın)', answer: 'Element' },
+            { display: 'Ag (Gümüş)', answer: 'Element' },
+            { display: 'Cu (Bakır)', answer: 'Element' },
+            { display: 'Zn (Çinko)', answer: 'Element' },
+            { display: 'Pb (Kurşun)', answer: 'Element' },
+            { display: 'Hg (Cıva)', answer: 'Element' },
+            { display: 'Fe (Demir)', answer: 'Element' },
+            { display: 'Cl (Klor)', answer: 'Element' },
+            { display: 'Al (Alüminyum)', answer: 'Element' },
+            { display: 'Mg (Magnezyum)', answer: 'Element' },
+            { display: 'Na (Sodyum)', answer: 'Element' },
+            { display: 'C (Karbon)', answer: 'Element' },
+            
+            // Bileşikler (En az iki farklı çeşit atom içerir)
+            { display: 'H₂O (Su)', answer: 'Bileşik' },
+            { display: 'NaCl (Sofra Tuzu)', answer: 'Bileşik' },
+            { display: 'C₆H₁₂O₆ (Glikoz/Şeker)', answer: 'Bileşik' },
+            { display: 'SO₂ (Kükürt Dioksit)', answer: 'Bileşik' },
+            { display: 'HCl (Tuz Ruhu)', answer: 'Bileşik' },
+            { display: 'NH₃ (Amonyak)', answer: 'Bileşik' },
+            { display: 'HNO₃ (Nitrik Asit)', answer: 'Bileşik' },
+            { display: 'H₂SO₄ (Sülfürik Asit)', answer: 'Bileşik' },
+            { display: 'NaOH (Sodyum Hidroksit)', answer: 'Bileşik' }
+        ];
+
+        // DOM Elementleri
+        const scoreElement = document.getElementById('score');
+        const timeElement = document.getElementById('time');
+        const questionText = document.getElementById('question-text');
+        const elementBtn = document.getElementById('element-btn');
+        const compoundBtn = document.getElementById('compound-btn');
+        const startBtn = document.getElementById('start-btn');
+        const questionBox = document.getElementById('question-box');
+        const buttonContainer = document.getElementById('button-container');
+        const modal = document.getElementById('game-modal');
+        const modalTitle = document.getElementById('modal-title');
+        const modalMessage = document.getElementById('modal-message');
+        const modalCloseBtn = document.getElementById('modal-close-btn');
+        const errorSection = document.getElementById('error-section');
+        // Yeni tablo yapısı için tbody elementini alıyoruz
+        const errorTableBody = document.getElementById('error-table-body'); 
+        const timeBar = document.getElementById('time-bar');
+
+        // Oyun Durumu
+        let currentScore = 0;
+        let timeLeft = 60; // Süre 60 saniyeye güncellendi
+        let gameInterval;
+        let currentQuestion = null;
+        let isGameRunning = false;
+        let askedQuestions = [];
+        let incorrectAnswers = []; // Hatalı cevapları kaydetmek için yeni dizi
+
+        // --- Oyun Fonksiyonları ---
+
+        function getRandomQuestion() {
+            if (askedQuestions.length === questions.length) {
+                askedQuestions = []; // Tüm sorular sorulduysa listeyi sıfırla
+            }
+            
+            let availableQuestions = questions.filter(q => !askedQuestions.includes(q));
+            if (availableQuestions.length === 0) {
+                 // Eğer tek bir turda çok hızlı oynanırsa, tüm soruları sıfırlayıp tekrar dene
+                askedQuestions = []; 
+                availableQuestions = questions;
+            }
+
+            const randomIndex = Math.floor(Math.random() * availableQuestions.length);
+            const question = availableQuestions[randomIndex];
+            askedQuestions.push(question);
+            return question;
+        }
+
+        function showNextQuestion() {
+            currentQuestion = getRandomQuestion();
+            questionText.textContent = currentQuestion.display;
+            questionText.classList.remove('pop');
+            void questionText.offsetWidth;
+            questionText.classList.add('pop');
+        }
+
+        function updateScore(isCorrect, userAnswer) {
+            let className = '';
+            
+            if (isCorrect) {
+                currentScore += 10;
+                className = 'feedback-correct';
+            } else {
+                currentScore -= 5;
+                className = 'feedback-wrong';
+                // Yanlış cevabı kaydet
+                incorrectAnswers.push({
+                    question: currentQuestion.display,
+                    correctAnswer: currentQuestion.answer,
+                    userAnswer: userAnswer
+                });
+            }
+            
+            scoreElement.textContent = currentScore;
+            
+            // Geri bildirim animasyonunu tetikle
+            questionBox.classList.add(className);
+            setTimeout(() => {
+                questionBox.classList.remove(className);
+            }, 300);
+        }
+
+        function flashButton(buttonElement, isCorrect) {
+            const originalClasses = buttonElement.className;
+            
+            if (isCorrect) {
+                // Doğruysa yeşil geri bildirim
+                buttonElement.classList.remove('bg-green-500', 'bg-purple-500', 'hover:bg-green-600', 'hover:bg-purple-600');
+                buttonElement.classList.add('bg-green-600', 'ring-4', 'ring-green-300');
+            } else {
+                 // Yanlışsa kırmızı geri bildirim
+                buttonElement.classList.remove('bg-green-500', 'bg-purple-500', 'hover:bg-green-600', 'hover:bg-purple-600');
+                buttonElement.classList.add('bg-red-600', 'ring-4', 'ring-red-300');
+            }
+
+            // 300ms sonra orijinal haline döndür
+            setTimeout(() => {
+                // Orijinal sınıfları koruyarak renkleri geri getir
+                buttonElement.className = originalClasses;
+            }, 300);
+        }
+
+        function checkAnswer(userAnswer) {
+            if (!isGameRunning) return;
+
+            const isCorrect = userAnswer === currentQuestion.answer;
+            const clickedButton = userAnswer === 'Element' ? elementBtn : compoundBtn;
+
+            flashButton(clickedButton, isCorrect);
+            updateScore(isCorrect, userAnswer);
+            
+            // Kısa bir gecikmeyle sonraki soruya geç
+            setTimeout(showNextQuestion, 100); 
+        }
+
+        function timerTick() {
+            timeLeft--;
+            timeElement.textContent = timeLeft;
+            const widthPercent = Math.max(0, (timeLeft / 60) * 100);
+            timeBar.style.width = widthPercent + '%';
+
+            if (timeLeft <= 0) {
+                endGame();
+            }
+        }
+
+        function startGame() {
+            if (isGameRunning) return;
+
+            // Oyunu sıfırla
+            currentScore = 0;
+            timeLeft = 60; // Başlangıç süresi 60 saniye
+            isGameRunning = true;
+            askedQuestions = [];
+            incorrectAnswers = []; // Yeni oyun için hata listesini sıfırla
+            scoreElement.textContent = currentScore;
+            timeElement.textContent = timeLeft;
+            startBtn.classList.add('hidden');
+            modal.classList.add('hidden');
+            modal.style.display = 'none';
+
+            // Hata tablosu alanını temizle ve gizle
+            errorTableBody.innerHTML = '';
+            errorSection.classList.add('hidden');
+
+            // Timer'ı başlat
+            gameInterval = setInterval(timerTick, 1000);
+            timeBar.style.width = '100%';
+
+            // İlk soruyu göster
+            showNextQuestion();
+        }
+
+        // Hatalı cevapları tablo olarak gösteren fonksiyon
+        function displayIncorrectAnswers() {
+            errorTableBody.innerHTML = ''; // Tablo içeriğini temizle
+            
+            if (incorrectAnswers.length > 0) {
+                errorSection.classList.remove('hidden');
+                incorrectAnswers.forEach(item => {
+                    const tableRow = document.createElement('tr');
+                    // Hafif ayrım için border ve hover efekti ekle
+                    tableRow.className = 'border-b border-gray-100 hover:bg-red-50'; 
+                    
+                    // Soru (Question)
+                    const tdQuestion = document.createElement('td');
+                    tdQuestion.className = 'py-1 px-1 font-semibold text-gray-800 text-left';
+                    tdQuestion.textContent = item.question;
+                    tableRow.appendChild(tdQuestion);
+
+                    // Senin Cevabın (User Answer)
+                    const tdUserAnswer = document.createElement('td');
+                    tdUserAnswer.className = 'py-1 px-1 text-red-500 font-medium text-center';
+                    tdUserAnswer.textContent = item.userAnswer;
+                    tableRow.appendChild(tdUserAnswer);
+
+                    // Doğrusu (Correct Answer)
+                    const tdCorrectAnswer = document.createElement('td');
+                    tdCorrectAnswer.className = 'py-1 px-1 text-green-600 font-medium text-center';
+                    tdCorrectAnswer.textContent = item.correctAnswer;
+                    tableRow.appendChild(tdCorrectAnswer);
+
+                    errorTableBody.appendChild(tableRow);
+                });
+            } else {
+                errorSection.classList.add('hidden');
+            }
+        }
+
+        function endGame() {
+            clearInterval(gameInterval);
+            isGameRunning = false;
+            
+            // Hatalı cevapları modalda tablo olarak göster
+            displayIncorrectAnswers();
+
+            // Sonuç modalını göster
+            modalTitle.textContent = "Süre Bitti!";
+            modalMessage.innerHTML = `Toplam skorun: <strong>${currentScore}</strong>! ${incorrectAnswers.length > 0 ? 'Hatalarını gözden geçirerek tekrar dene!' : 'Mükemmel! Hiç hatan yok!'}`;
+            modal.style.display = 'flex';
+            modal.classList.remove('hidden');
+            launchConfetti();
+        }
+
+        function launchConfetti() {
+            const colors = ['#f59e0b', '#10b981', '#3b82f6', '#ef4444', '#a855f7', '#22d3ee'];
+            const count = 32;
+            for (let i = 0; i < count; i++) {
+                const piece = document.createElement('span');
+                piece.className = 'confetti';
+                piece.style.left = Math.random() * 100 + 'vw';
+                piece.style.background = colors[Math.floor(Math.random() * colors.length)];
+                piece.style.transform = `rotate(${Math.random() * 360}deg)`;
+                piece.style.animationDelay = (Math.random() * 0.6) + 's';
+                document.body.appendChild(piece);
+                setTimeout(() => piece.remove(), 2000);
+            }
+        }
+
+        function showInfoModal(title, message) {
+            modalTitle.textContent = title;
+            modalMessage.innerHTML = message;
+            modal.style.display = 'flex';
+            modal.classList.remove('hidden');
+            startBtn.classList.add('hidden');
+            errorSection.classList.add('hidden'); // Bilgi ekranında hata listesi gösterme
+        }
+
+        // --- Event Listener'lar ---
+
+        startBtn.addEventListener('click', startGame);
+        modalCloseBtn.addEventListener('click', startGame);
+
+        elementBtn.addEventListener('click', () => checkAnswer('Element'));
+        compoundBtn.addEventListener('click', () => checkAnswer('Bileşik'));
+
+        // Sayfa yüklendiğinde bilgilendirme modalı
+        window.onload = () => {
+             showInfoModal(
+                "HOŞ GELDİN, MOLEKÜL DEDEKTİFİ!",
+                "<em>60 saniyen</em> var. Maddeyi hızla <strong>Element</strong> veya <strong>Bileşik</strong> olarak sınıflandır. Doğru cevap +10, yanlış cevap -5 puandır. Hazır mısın?"
+             );
+        };
+
+    </script>
+</body>
+</html>
